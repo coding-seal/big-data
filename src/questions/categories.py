@@ -25,10 +25,13 @@ converges.
 
 One deliberate behaviour change from that switch: categories MediaWiki does
 *not* hide are now kept even when they are administrative in spirit --
-`Living_people` (80.9M views on the enwiki window) is a real, visible
-category, so the structural test keeps it where the old regex dropped it by
-editorial judgement. That is the more defensible answer, but it is a change
-in what the chart shows.
+`Living_people` (82.3M views on the enwiki window) is a real, visible
+category MediaWiki doesn't flag as hidden, but it describes a biographical
+*property*, not a subject -- every biography of a living person carries it
+regardless of what the article is about, so it dominates the chart without
+saying anything about topics. `ADMINISTRATIVE_CATEGORIES` below excludes it
+by explicit name, the same editorial-judgement call the old name-based regex
+made, now narrowed to a one-entry named list instead of 43 regex patterns.
 
 **What survives still isn't a topic taxonomy.** MediaWiki categories are
 far narrower than topics, and overlapping: with tracking tags gone, the
@@ -41,6 +44,12 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from questions.pages import with_page_id
+
+# Categories MediaWiki does not flag __HIDDENCAT__ (so hidden_category_dim
+# doesn't catch them) but that are administrative/biographical metadata, not
+# a subject -- measured by reading the top 15 of a real run, not guessed.
+ADMINISTRATIVE_CATEGORIES = {"Living_people"}
+
 
 def views_by_category_hour(
     views: DataFrame,
@@ -75,7 +84,7 @@ def views_by_category_hour(
         # never enter the ~25x fan-out below.
         categories = categories.join(
             hidden_category_dim.select("category").distinct(), "category", "left_anti"
-        )
+        ).filter(~F.col("category").isin(ADMINISTRATIVE_CATEGORIES))
 
     # Collapse to one row per (page_id, hour) *before* the category join.
     # pageviews_fact is keyed (title, date, hour) and this question sums

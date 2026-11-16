@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pipeline.logging import configure
 from config import load_config
-from pipeline import bronze, gold, silver
+from pipeline import bronze, gold, silver, site
 from pipeline.storage import REPO_ROOT
 from questions import QUESTIONS
 
@@ -28,6 +28,7 @@ def main() -> None:
     sub.add_parser("download", help="fetch bronze files for the configured wiki/date range")
     sub.add_parser("build-silver", help="parse bronze into the silver tables")
     sub.add_parser("build-gold", help="run every question, write each as a Vega-Lite chart spec")
+    sub.add_parser("build-site", help="render every profile's gold/*.json as a static site/ (no Spark)")
     run_q = sub.add_parser("run-question", help="run one question module against silver")
     run_q.add_argument("name", choices=sorted(QUESTIONS))
 
@@ -40,6 +41,8 @@ def main() -> None:
         silver.build(config)
     elif args.command == "build-gold":
         gold.build(config)
+    elif args.command == "build-site":
+        site.build()
     elif args.command == "run-question":
         gold.show_question(config, args.name)
 

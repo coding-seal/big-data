@@ -24,6 +24,18 @@ itn_edit_fact without an edit to match against:
 Collapsing either case into has_nearby_news=false would manufacture a
 finding ("most spikes aren't news-driven!") out of missing data, so spikes
 outside the span itn_edit_fact actually covers are labelled explicitly.
+
+**A match requires the ITN edit to name the article, not just be nearby in
+time.** The ITN page is edited ~6.6x/day, so on a one-week window every
+single hour sits within +-24h of *some* edit -- a timestamp-only match is
+NEWS_MATCHED for 168/168 hours by arithmetic, which carries no information
+(measured on the enwiki week, see AGENTS.md). mediawiki_history doesn't give
+the full wikitext, but it does give the edit comment, and ITN edit comments
+conventionally name the articles being added/removed as `[[Title]]`
+wikilinks ("RD: + *[[Albert Alós]]", "+2026 Kazakh legislative election").
+So NEWS_MATCHED now requires a nearby edit whose comment links the spiking
+article by title -- a real, falsifiable test instead of a proximity count
+that can only ever say yes.
 """
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
@@ -33,10 +45,16 @@ from questions.pages import with_page_id
 # A hour counts as a "spike" for a page if its views are at least this many
 # times that page's own average views over the window.
 SPIKE_RATIO = 3.0
-# How close (in hours) an ITN edit must be to a spike to count as "nearby".
+# How close (in hours) a linking ITN edit must be to a spike to count as
+# "nearby".
 NEWS_WINDOW_HOURS = 24
 # Same reasoning as q1/q3's top-N caps.
 TOP_N_SPIKES = 20
+# Captures "Title" out of "[[Title]]" or "[[Title|display text]]".
+# shortcut: exact-case match only (no first-letter case-folding), so a link
+# typed with a different first-letter case than page_dim's title silently
+# misses; widen with F.initcap on both sides if false negatives show up.
+ITN_LINK_PATTERN = r"\[\[([^\]|]+)"
 
 # The three answers this question can give about one spike.
 NEWS_MATCHED = "near an ITN edit"
@@ -86,47 +104,60 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
     )
 
     baseline = ts.groupBy("page_id").agg(F.avg("views").alias("avg_views"))
+    # page_title joins in here, not after limit() like q3: content matching
+    # below needs it to compare against the ITN comment's linked titles.
     spikes = (
         ts.join(baseline, "page_id")
         .filter(F.col("avg_views") > 0)
         .filter(F.col("views") >= SPIKE_RATIO * F.col("avg_views"))
-        .select("page_id", "ts", "views", "avg_views")
+        .join(page_dim.select("page_id", "page_title"), "page_id")
+        .select("page_title", "ts", "views", "avg_views")
     )
 
     # mediawiki_history stores the raw event_timestamp string (e.g.
     # "2026-09-03 12:34:56.0"); truncate to whole seconds before parsing
-    # since the fractional-second digit count varies row to row.
-    itn_ts = itn.select(
+    # since the fractional-second digit count varies row to row. The
+    # linked_titles array turns "[[Title]]"/"[[Title|display]]" wikilinks in
+    # the edit comment into underscore-joined titles matching page_dim's
+    # format (see module docstring).
+    itn_links = itn.select(
         F.to_timestamp(F.substring("event_timestamp", 1, 19), "yyyy-MM-dd HH:mm:ss").alias(
             "news_ts"
-        )
+        ),
+        F.transform(
+            F.regexp_extract_all("event_comment", F.lit(ITN_LINK_PATTERN), 1),
+            lambda link: F.regexp_replace(F.trim(link), " ", "_"),
+        ).alias("linked_titles"),
     )
 
-    # itn_ts is tiny (one page's edit history for the downloaded window) --
-    # a crossJoin against it is nowhere near pageviews_fact's scale.
+    # itn_links is tiny (one page's edit history for the downloaded window)
+    # -- joining its exploded links is nowhere near pageviews_fact's scale.
     nearest_news = (
-        spikes.crossJoin(itn_ts)
+        spikes.join(
+            itn_links.select("news_ts", F.explode("linked_titles").alias("page_title")),
+            "page_title",
+        )
         .withColumn(
             "hours_from_news",
             F.abs(F.col("ts").cast("long") - F.col("news_ts").cast("long")) / 3600,
         )
         .filter(F.col("hours_from_news") <= NEWS_WINDOW_HOURS)
-        .groupBy("page_id", "ts", "views", "avg_views")
+        .groupBy("page_title", "ts", "views", "avg_views")
         .agg(F.min("hours_from_news").alias("hours_from_nearest_news"))
     )
 
-    # The span itn_edit_fact can speak to at all: outside it, "no edit
-    # within NEWS_WINDOW_HOURS" says something about the dump's coverage,
-    # not about the news. Both bounds are null when itn is empty, so every
-    # comparison below is null and every spike falls through to UNKNOWN --
-    # which is the honest answer when no ITN page is configured.
-    bounds = itn_ts.agg(
+    # The span itn_edit_fact can speak to at all: outside it, "no linking
+    # edit nearby" says something about the dump's coverage, not about the
+    # news. Both bounds are null when itn is empty, so every comparison below
+    # is null and every spike falls through to UNKNOWN -- which is the
+    # honest answer when no ITN page is configured.
+    bounds = itn_links.agg(
         F.min("news_ts").alias("news_from"), F.max("news_ts").alias("news_to")
     )
     window = F.expr(f"interval {NEWS_WINDOW_HOURS} hours")
 
-    result = (
-        spikes.join(nearest_news, ["page_id", "ts", "views", "avg_views"], "left")
+    return (
+        spikes.join(nearest_news, ["page_title", "ts", "views", "avg_views"], "left")
         .crossJoin(bounds)  # one row, so this is a broadcast, not a blowup
         .withColumn(
             "news_match",
@@ -143,9 +174,3 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
         .orderBy(F.desc("views"))
         .limit(TOP_N_SPIKES)
     )
-    # Name the articles last: after limit() this is a 20-row join, and
-    # page_dim's title is the canonical one the fold aggregated onto.
-    return result.join(page_dim.select("page_id", "page_title"), "page_id").select(
-        "page_title", "ts", "views", "avg_views",
-        "hours_from_nearest_news", "news_match",
-    ).orderBy(F.desc("views"))

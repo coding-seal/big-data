@@ -15,7 +15,7 @@ from questions.pages import with_page_id
 
 # Same reasoning as q1's TOP_N_CATEGORIES: ungated this is one row per
 # (page, hour) for every page that ever appears, most of it one-off noise.
-# Capping to the top-N pages by peak views keeps the decay curve readable.
+# Capping to the top-N pages by peak/avg ratio keeps the decay curve readable.
 TOP_N_PAGES = 10
 
 
@@ -52,7 +52,10 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
         .agg(F.sum("views").alias("views"))
     )
 
-    peak_views = ts.groupBy("page_id").agg(F.max("views").alias("peak_views"))
+    peak_views = (
+        ts.groupBy("page_id")
+        .agg(F.max("views").alias("peak_views"), F.avg("views").alias("avg_views"))
+    )
     # Earliest hour the peak occurred, in case of a tie -- so "hours since
     # peak" counts from a single well-defined zero point per page.
     peak_ts = (
@@ -62,8 +65,16 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
         .agg(F.min("ts").alias("peak_ts"))
     )
 
+    # Rank by peak/avg, not absolute peak views -- a page with 30M views/hour
+    # every hour has a bigger peak than a real spike but no decay to chart
+    # (Main_Page: 1.52x its own baseline, a flat diurnal curve). Same
+    # reasoning as q2's SPIKE_RATIO.
     top_pages = (
-        peak_views.orderBy(F.desc("peak_views")).limit(TOP_N_PAGES).select("page_id")
+        peak_views.filter(F.col("avg_views") > 0)
+        .withColumn("peak_ratio", F.col("peak_views") / F.col("avg_views"))
+        .orderBy(F.desc("peak_ratio"))
+        .limit(TOP_N_PAGES)
+        .select("page_id")
     )
 
     decay = (

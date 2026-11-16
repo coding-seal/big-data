@@ -1,0 +1,40 @@
+# Publishes the already-built site/ directory (see `just pipeline::site` /
+# src/pipeline/site.py) to GitHub Pages. Doesn't run the Spark pipeline --
+# site/ is committed, static output copied from data/gold/*, which is
+# gitignored and multi-GB. Regenerate and commit site/ locally after any
+# gold rebuild, then push, to update the published charts.
+#
+# One-time manual step this workflow depends on: repo Settings -> Pages ->
+# "Build and deployment" -> Source: "GitHub Actions".
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

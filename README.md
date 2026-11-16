@@ -89,6 +89,20 @@ To run the English Wikipedia profile instead, point every command at the other c
 uv run python3 src/run.py --config config.enwiki.yaml download
 ```
 
+## Site
+
+`just pipeline::site` (or `uv run python3 src/run.py build-site`) renders every
+profile's already-built `data/gold/<wiki>/*.json` into a static `site/` -- one
+page, one section per wiki, each chart captioned with its window/wiki/denominator.
+No Spark involved, so it's fast and doesn't need a container. Run `just
+pipeline::gold` first.
+
+`site/` is committed (unlike `data/`, which is gitignored and multi-GB) and
+published by `.github/workflows/pages.yml` on push to `master`. Regenerate and
+commit `site/` after any gold rebuild, then push, to update the published
+charts. One-time setup: repo Settings -> Pages -> "Build and deployment" ->
+Source: "GitHub Actions".
+
 ## Agentic development
 
 This repo is set up to be worked on by multiple coding agents:

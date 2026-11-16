@@ -1,0 +1,159 @@
+# Text and labels for the published site (pipeline/site.py), decoupled from
+# how the numbers were produced: nothing here names a Spark table, a
+# question module, or a silver/gold path. Add a chart, retitle the page, or
+# fix a typo by editing this file -- no Python or HTML touched. The HTML
+# shell itself is pipeline/site_template.html (Jinja2); site.py only reads
+# gold/*.json, applies this file, and renders that template.
+#
+# `questions:` keys are data/gold/<wiki>/<name>.json filenames (without
+# .json) -- that's the one place this file has to agree with the pipeline,
+# since it's how a chart's prose gets matched to its data. A question with
+# no entry here still renders, titled by its filename with no caveat.
+# Order here is the order charts appear on the page.
+
+page:
+  title: "Трафик просмотров Википедии: находки"
+  heading: "Трафик просмотров Википедии: находки"
+  subtitle_html: >-
+    Spark-пайплайн по открытым дампам Wikimedia. Код:
+    <a href="https://github.com/Coding-Seal/big-data">Coding-Seal/big-data</a>.
+  intro_html: >-
+    Пять вопросов (Q1-Q5) про трафик просмотров, посчитанные на двух вики ниже;
+    у каждого графика — своя оговорка о том, что число покрывает и чего нет.
+  footer: >-
+    Под каждым графиком есть строка с оговоркой: что именно считают его числа
+    и чего они не покрывают. Прочитайте её, прежде чем цитировать число.
+
+# wiki (config.yaml's `wiki:` value) -> display label for that section's <h2>.
+wiki_labels:
+  en: "Английская Википедия (enwiki)"
+  simple: "Simple English Wikipedia (simplewiki)"
+
+# Vega-Lite field name -> Russian axis/legend/tooltip label. The question
+# modules keep English field names (code stays English); this is display
+# text only.
+field_titles:
+  category: "Категория"
+  hour: "Час (UTC)"
+  views: "Просмотры"
+  articles: "Статей"
+  ts: "Время всплеска"
+  avg_views: "Средние просмотры"
+  hours_from_nearest_news: "Часов до новости"
+  news_match: "Совпадение с новостью"
+  page_title: "Статья"
+  hours_since_peak: "Часов после пика"
+  pct_of_peak: "% от пика"
+  peak_views: "Просмотры в пике"
+  length_bucket: "Длина статьи"
+  pct_viewed: "Доля просмотренных"
+  avg_views_if_viewed: "Просмотры (если смотрели)"
+  avg_length: "Средняя длина"
+  avg_revisions: "Правок в среднем"
+  day_of_week: "День недели"
+  is_weekend: "Выходной"
+
+# field name -> {english value -> Russian value}, for the handful of
+# fields whose *data* (not just its axis title) is an English string or
+# constant from a question module (q2_spikes_news.NEWS_MATCHED/... and
+# q5_weekday.DAY_ORDER). Applied to every row and to any encoding "sort"
+# list naming the same field, so legend/facet order survives translation.
+value_translations:
+  news_match:
+    "near an ITN edit": "рядом правка ITN"
+    "no ITN edit nearby": "нет правки ITN рядом"
+    "no ITN data for this hour": "нет данных ITN за этот час"
+  day_of_week:
+    Monday: "Понедельник"
+    Tuesday: "Вторник"
+    Wednesday: "Среда"
+    Thursday: "Четверг"
+    Friday: "Пятница"
+    Saturday: "Суббота"
+    Sunday: "Воскресенье"
+
+questions:
+  q1_topic_time:
+    title: "Q1: трафик по категориям без фильтра"
+    short: "Q1"
+    summary: >-
+      Просмотры и число статей по категориям и часам дня, без исключений.
+    caveat: >-
+      Это не классификация по темам: в таком масштабе верхние категории
+      оказываются служебными метками, а не предметом статьи. Просмотр
+      считается один раз на каждую категорию статьи, суммы не складываются,
+      так что столбики нельзя читать как общий итог.
+
+  q1b_topic_time_filtered:
+    title: "Q1b: трафик по категориям с фильтром"
+    short: "Q1b"
+    summary: >-
+      То же самое, но без скрытых категорий MediaWiki (флаг __HIDDENCAT__) и
+      без одной явно убранной учётной категории, Living_people.
+    caveat: >-
+      То, что осталось, всё ещё сырые категории MediaWiki, а не темы: они
+      обычно уже предмета статьи и пересекаются между собой (несколько
+      категорий про американских актёров описывают одних и тех же людей).
+      Просмотры всё ещё не складываются между категориями.
+
+  q2_spikes_news:
+    title: "Q2: всплески просмотров и новости"
+    short: "Q2"
+    summary: >-
+      20 крупнейших часовых всплесков (просмотры не менее чем в 3 раза выше
+      собственного среднего за неделю), проверенных на то, упоминает ли
+      статью по названию близкая по времени правка страницы «In the news».
+    caveat: >-
+      Всплеск считается совпадением с новостью только если правка ITN в
+      пределах ±24 часов ссылается на статью по названию. Проверка по одному
+      лишь времени ничего не показала: любой час недели лежит в пределах
+      ±24 часов от какой-нибудь правки, поэтому ответ «нет» был физически
+      недостижим.
+
+  q3_decay:
+    title: "Q3: затухание после пика"
+    short: "Q3"
+    summary: >-
+      10 статей с наибольшим отношением пиковых просмотров к средним и то,
+      как быстро падает трафик в часы после пика у каждой.
+    caveat: >-
+      Ранжирование идёт по отношению пика к среднему, а не по абсолютному
+      числу просмотров в пике: ранжирование по абсолютному пику выбирает
+      страницы без настоящего всплеска, например ровный высокотрафиковый
+      Main_Page или трафик ботов на устаревший редирект.
+
+  q4_length_revisions:
+    title: "Q4: длина статьи, просмотры и правки"
+    short: "Q4"
+    summary: >-
+      Средние просмотры и среднее число правок по корзинам длины статьи.
+    caveat: >-
+      avg_views считается по всем статьям в корзине, непросмотренные учтены
+      нулём. avg_revisions считается только по статьям, которые покрывает
+      скачанная история правок, а на enwiki это меньшинство, и доля растёт с
+      длиной статьи, так что часть роста на графике объясняется покрытием, а
+      не только интенсивностью редактирования.
+
+  q4b_length_no_mainpage:
+    title: "Q4b: длина статьи, просмотры и правки, без Main_Page"
+    short: "Q4b"
+    summary: "То же самое, но без самой просматриваемой статьи, Main_Page."
+    caveat: "Та же оговорка про покрытие avg_revisions, что и в Q4."
+
+  q5_weekday:
+    title: "Q5: трафик по дням недели"
+    short: "Q5"
+    summary: >-
+      Просмотры статей по часам дня в разбивке по дням недели за одну полную
+      неделю.
+    caveat: >-
+      На каждый день недели приходится всего одно наблюдение: одной недели
+      недостаточно, чтобы отличить настоящий недельный ритм от единственной
+      вирусной статьи. Сюда входит Main_Page со своим отдельным ритмом и
+      заметной долей всего трафика.
+
+  q5b_weekday_no_mainpage:
+    title: "Q5b: трафик по дням недели, без Main_Page"
+    short: "Q5b"
+    summary: "То же самое, но без Main_Page."
+    caveat: "Та же оговорка про одно наблюдение на день недели, что и в Q5."

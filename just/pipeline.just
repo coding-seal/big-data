@@ -51,6 +51,13 @@ question name: _require-container
 gold: _require-container
     {{run}} build-gold
 
+# Render every profile's already-built gold/*.json as a static site/
+# (index.html + copied chart specs) for GitHub Pages. Spans every
+# config*.yaml, not just {{config}}, so no --config here -- see
+# pipeline/site.py.
+site: _require-container
+    {{py}} src/run.py build-site
+
 # download -> build-silver -> gold, in one shot
 all: download build-silver gold
 

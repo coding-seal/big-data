@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Трафик просмотров Википедии: находки</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+  --muted: #898781; --border: rgba(11,11,11,0.10);
+  --caveat-ink: #7a4a00; --caveat-border: #e0a040;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --border: rgba(255,255,255,0.10);
+    --caveat-ink: #f0c080; --caveat-border: #c98500;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page); color: var(--ink);
+  max-width: 920px; margin: 0 auto; padding: 2.5rem 1.25rem 1rem;
+  line-height: 1.5;
+}
+h1 { margin: 0 0 0.3rem; font-size: 1.8rem; letter-spacing: -0.01em; }
+.subtitle { color: var(--ink-2); margin: 0 0 1rem; }
+.subtitle a { color: inherit; text-decoration: underline; }
+.intro { color: var(--ink-2); margin: 0 0 1.25rem; }
+.toc { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1.5rem; padding: 0; list-style: none; }
+.toc a {
+  color: var(--ink-2); text-decoration: none; font-size: 0.85rem;
+  padding: 0.3rem 0.7rem; border: 1px solid var(--border); border-radius: 999px;
+}
+.toc a:hover { color: var(--ink); border-color: var(--ink-2); }
+.wiki-section {
+  margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem;
+  scroll-margin-top: 1rem;
+}
+.wiki-section h2 { margin: 0 0 0.2rem; font-size: 1.3rem; }
+.window { color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; }
+.quicknav { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0; list-style: none; }
+.quicknav a {
+  color: var(--ink-2); text-decoration: none; font-size: 0.8rem;
+  padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px;
+}
+.quicknav a:hover { color: var(--ink); border-color: var(--ink-2); }
+.chart-card {
+  margin: 1.5rem 0; padding: 1.25rem 1.5rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px;
+  scroll-margin-top: 1rem;
+}
+.chart-card h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.summary { color: var(--ink-2); margin: 0 0 1rem; }
+.caveat {
+  color: var(--caveat-ink); font-size: 0.85rem; margin: 1rem 0 0;
+  border-left: 3px solid var(--caveat-border); padding-left: 0.75rem;
+}
+.chart { width: 100%; overflow-x: auto; scroll-margin-top: 1rem; }
+footer { margin: 3rem 0 1.5rem; color: var(--muted); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>Трафик просмотров Википедии: находки</h1>
+<p class="subtitle">Spark-пайплайн по открытым дампам Wikimedia. Код: <a href="https://github.com/Coding-Seal/big-data">Coding-Seal/big-data</a>.</p>
+<p class="intro">Пять вопросов (Q1-Q5) про трафик просмотров, посчитанные на двух вики ниже; у каждого графика — своя оговорка о том, что число покрывает и чего нет.</p>
+
+<ul class="toc">
+  <li><a href="#wiki-en">Английская Википедия (enwiki)</a></li><li><a href="#wiki-simple">Simple English Wikipedia (simplewiki)</a></li>
+</ul>
+
+
+<section class="wiki-section" id="wiki-en">
+  <h2>Английская Википедия (enwiki)</h2>
+  <p class="window">Период: 2026-09-14T00 .. 2026-09-20T23</p>
+  <ul class="quicknav">
+    <li><a href="#chart-en-q1_topic_time">Q1: трафик по категориям без фильтра</a></li><li><a href="#chart-en-q1b_topic_time_filtered">Q1b: трафик по категориям с фильтром</a></li><li><a href="#chart-en-q2_spikes_news">Q2: всплески просмотров и новости</a></li><li><a href="#chart-en-q3_decay">Q3: затухание после пика</a></li><li><a href="#chart-en-q4_length_revisions">Q4: длина статьи, просмотры и правки</a></li><li><a href="#chart-en-q4b_length_no_mainpage">Q4b: длина статьи, просмотры и правки, без Main_Page</a></li><li><a href="#chart-en-q5_weekday">Q5: трафик по дням недели</a></li><li><a href="#chart-en-q5b_weekday_no_mainpage">Q5b: трафик по дням недели, без Main_Page</a></li>
+  </ul>
+  
+  <article class="chart-card">
+    <h3>Q1: трафик по категориям без фильтра</h3>
+    <p class="summary">Просмотры и число статей по категориям и часам дня, без исключений.</p>
+    <div class="chart" id="chart-en-q1_topic_time"></div>
+    <p class="caveat">Это не классификация по темам: в таком масштабе верхние категории оказываются служебными метками, а не предметом статьи. Просмотр считается один раз на каждую категорию статьи, суммы не складываются, так что столбики нельзя читать как общий итог.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q1b: трафик по категориям с фильтром</h3>
+    <p class="summary">То же самое, но без скрытых категорий MediaWiki (флаг __HIDDENCAT__) и без одной явно убранной учётной категории, Living_people.</p>
+    <div class="chart" id="chart-en-q1b_topic_time_filtered"></div>
+    <p class="caveat">То, что осталось, всё ещё сырые категории MediaWiki, а не темы: они обычно уже предмета статьи и пересекаются между собой (несколько категорий про американских актёров описывают одних и тех же людей). Просмотры всё ещё не складываются между категориями.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q2: всплески просмотров и новости</h3>
+    <p class="summary">20 крупнейших часовых всплесков (просмотры не менее чем в 3 раза выше собственного среднего за неделю), проверенных на то, упоминает ли статью по названию близкая по времени правка страницы «In the news».</p>
+    <div class="chart" id="chart-en-q2_spikes_news"></div>
+    <p class="caveat">Всплеск считается совпадением с новостью только если правка ITN в пределах ±24 часов ссылается на статью по названию. Проверка по одному лишь времени ничего не показала: любой час недели лежит в пределах ±24 часов от какой-нибудь правки, поэтому ответ «нет» был физически недостижим.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q3: затухание после пика</h3>
+    <p class="summary">10 статей с наибольшим отношением пиковых просмотров к средним и то, как быстро падает трафик в часы после пика у каждой.</p>
+    <div class="chart" id="chart-en-q3_decay"></div>
+    <p class="caveat">Ранжирование идёт по отношению пика к среднему, а не по абсолютному числу просмотров в пике: ранжирование по абсолютному пику выбирает страницы без настоящего всплеска, например ровный высокотрафиковый Main_Page или трафик ботов на устаревший редирект.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q4: длина статьи, просмотры и правки</h3>
+    <p class="summary">Средние просмотры и среднее число правок по корзинам длины статьи.</p>
+    <div class="chart" id="chart-en-q4_length_revisions"></div>
+    <p class="caveat">avg_views считается по всем статьям в корзине, непросмотренные учтены нулём. avg_revisions считается только по статьям, которые покрывает скачанная история правок, а на enwiki это меньшинство, и доля растёт с длиной статьи, так что часть роста на графике объясняется покрытием, а не только интенсивностью редактирования.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q4b: длина статьи, просмотры и правки, без Main_Page</h3>
+    <p class="summary">То же самое, но без самой просматриваемой статьи, Main_Page.</p>
+    <div class="chart" id="chart-en-q4b_length_no_mainpage"></div>
+    <p class="caveat">Та же оговорка про покрытие avg_revisions, что и в Q4.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q5: трафик по дням недели</h3>
+    <p class="summary">Просмотры статей по часам дня в разбивке по дням недели за одну полную неделю.</p>
+    <div class="chart" id="chart-en-q5_weekday"></div>
+    <p class="caveat">На каждый день недели приходится всего одно наблюдение: одной недели недостаточно, чтобы отличить настоящий недельный ритм от единственной вирусной статьи. Сюда входит Main_Page со своим отдельным ритмом и заметной долей всего трафика.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q5b: трафик по дням недели, без Main_Page</h3>
+    <p class="summary">То же самое, но без Main_Page.</p>
+    <div class="chart" id="chart-en-q5b_weekday_no_mainpage"></div>
+    <p class="caveat">Та же оговорка про одно наблюдение на день недели, что и в Q5.</p>
+  </article>
+  
+</section>
+
+<section class="wiki-section" id="wiki-simple">
+  <h2>Simple English Wikipedia (simplewiki)</h2>
+  <p class="window">Период: 2026-10-04T00 .. 2026-10-10T23</p>
+  <ul class="quicknav">
+    <li><a href="#chart-simple-q1_topic_time">Q1: трафик по категориям без фильтра</a></li><li><a href="#chart-simple-q1b_topic_time_filtered">Q1b: трафик по категориям с фильтром</a></li><li><a href="#chart-simple-q2_spikes_news">Q2: всплески просмотров и новости</a></li><li><a href="#chart-simple-q3_decay">Q3: затухание после пика</a></li><li><a href="#chart-simple-q4_length_revisions">Q4: длина статьи, просмотры и правки</a></li><li><a href="#chart-simple-q4b_length_no_mainpage">Q4b: длина статьи, просмотры и правки, без Main_Page</a></li><li><a href="#chart-simple-q5_weekday">Q5: трафик по дням недели</a></li><li><a href="#chart-simple-q5b_weekday_no_mainpage">Q5b: трафик по дням недели, без Main_Page</a></li>
+  </ul>
+  
+  <article class="chart-card">
+    <h3>Q1: трафик по категориям без фильтра</h3>
+    <p class="summary">Просмотры и число статей по категориям и часам дня, без исключений.</p>
+    <div class="chart" id="chart-simple-q1_topic_time"></div>
+    <p class="caveat">Это не классификация по темам: в таком масштабе верхние категории оказываются служебными метками, а не предметом статьи. Просмотр считается один раз на каждую категорию статьи, суммы не складываются, так что столбики нельзя читать как общий итог.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q1b: трафик по категориям с фильтром</h3>
+    <p class="summary">То же самое, но без скрытых категорий MediaWiki (флаг __HIDDENCAT__) и без одной явно убранной учётной категории, Living_people.</p>
+    <div class="chart" id="chart-simple-q1b_topic_time_filtered"></div>
+    <p class="caveat">То, что осталось, всё ещё сырые категории MediaWiki, а не темы: они обычно уже предмета статьи и пересекаются между собой (несколько категорий про американских актёров описывают одних и тех же людей). Просмотры всё ещё не складываются между категориями.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q2: всплески просмотров и новости</h3>
+    <p class="summary">20 крупнейших часовых всплесков (просмотры не менее чем в 3 раза выше собственного среднего за неделю), проверенных на то, упоминает ли статью по названию близкая по времени правка страницы «In the news».</p>
+    <div class="chart" id="chart-simple-q2_spikes_news"></div>
+    <p class="caveat">Всплеск считается совпадением с новостью только если правка ITN в пределах ±24 часов ссылается на статью по названию. Проверка по одному лишь времени ничего не показала: любой час недели лежит в пределах ±24 часов от какой-нибудь правки, поэтому ответ «нет» был физически недостижим.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q3: затухание после пика</h3>
+    <p class="summary">10 статей с наибольшим отношением пиковых просмотров к средним и то, как быстро падает трафик в часы после пика у каждой.</p>
+    <div class="chart" id="chart-simple-q3_decay"></div>
+    <p class="caveat">Ранжирование идёт по отношению пика к среднему, а не по абсолютному числу просмотров в пике: ранжирование по абсолютному пику выбирает страницы без настоящего всплеска, например ровный высокотрафиковый Main_Page или трафик ботов на устаревший редирект.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q4: длина статьи, просмотры и правки</h3>
+    <p class="summary">Средние просмотры и среднее число правок по корзинам длины статьи.</p>
+    <div class="chart" id="chart-simple-q4_length_revisions"></div>
+    <p class="caveat">avg_views считается по всем статьям в корзине, непросмотренные учтены нулём. avg_revisions считается только по статьям, которые покрывает скачанная история правок, а на enwiki это меньшинство, и доля растёт с длиной статьи, так что часть роста на графике объясняется покрытием, а не только интенсивностью редактирования.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q4b: длина статьи, просмотры и правки, без Main_Page</h3>
+    <p class="summary">То же самое, но без самой просматриваемой статьи, Main_Page.</p>
+    <div class="chart" id="chart-simple-q4b_length_no_mainpage"></div>
+    <p class="caveat">Та же оговорка про покрытие avg_revisions, что и в Q4.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q5: трафик по дням недели</h3>
+    <p class="summary">Просмотры статей по часам дня в разбивке по дням недели за одну полную неделю.</p>
+    <div class="chart" id="chart-simple-q5_weekday"></div>
+    <p class="caveat">На каждый день недели приходится всего одно наблюдение: одной недели недостаточно, чтобы отличить настоящий недельный ритм от единственной вирусной статьи. Сюда входит Main_Page со своим отдельным ритмом и заметной долей всего трафика.</p>
+  </article>
+  
+  <article class="chart-card">
+    <h3>Q5b: трафик по дням недели, без Main_Page</h3>
+    <p class="summary">То же самое, но без Main_Page.</p>
+    <div class="chart" id="chart-simple-q5b_weekday_no_mainpage"></div>
+    <p class="caveat">Та же оговорка про одно наблюдение на день недели, что и в Q5.</p>
+  </article>
+  
+</section>
+
+
+<footer>Под каждым графиком есть строка с оговоркой: что именно считают его числа и чего они не покрывают. Прочитайте её, прежде чем цитировать число.</footer>
+<script>
+const specs = [{"id": "chart-en-q1_topic_time", "url": "data/en/q1_topic_time.json"}, {"id": "chart-en-q1b_topic_time_filtered", "url": "data/en/q1b_topic_time_filtered.json"}, {"id": "chart-en-q2_spikes_news", "url": "data/en/q2_spikes_news.json"}, {"id": "chart-en-q3_decay", "url": "data/en/q3_decay.json"}, {"id": "chart-en-q4_length_revisions", "url": "data/en/q4_length_revisions.json"}, {"id": "chart-en-q4b_length_no_mainpage", "url": "data/en/q4b_length_no_mainpage.json"}, {"id": "chart-en-q5_weekday", "url": "data/en/q5_weekday.json"}, {"id": "chart-en-q5b_weekday_no_mainpage", "url": "data/en/q5b_weekday_no_mainpage.json"}, {"id": "chart-simple-q1_topic_time", "url": "data/simple/q1_topic_time.json"}, {"id": "chart-simple-q1b_topic_time_filtered", "url": "data/simple/q1b_topic_time_filtered.json"}, {"id": "chart-simple-q2_spikes_news", "url": "data/simple/q2_spikes_news.json"}, {"id": "chart-simple-q3_decay", "url": "data/simple/q3_decay.json"}, {"id": "chart-simple-q4_length_revisions", "url": "data/simple/q4_length_revisions.json"}, {"id": "chart-simple-q4b_length_no_mainpage", "url": "data/simple/q4b_length_no_mainpage.json"}, {"id": "chart-simple-q5_weekday", "url": "data/simple/q5_weekday.json"}, {"id": "chart-simple-q5b_weekday_no_mainpage", "url": "data/simple/q5b_weekday_no_mainpage.json"}];
+const lightConfig = {"background": "#fcfcfb", "mark": {"color": "#2a78d6"}, "range": {"category": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]}, "axis": {"labelColor": "#52514e", "titleColor": "#0b0b0b", "domainColor": "#c3c2b7", "tickColor": "#c3c2b7", "gridColor": "#e1e0d9", "labelLimit": 500}, "legend": {"labelColor": "#52514e", "titleColor": "#0b0b0b", "labelLimit": 500}, "header": {"labelColor": "#0b0b0b", "titleColor": "#0b0b0b", "labelLimit": 500}, "title": {"color": "#0b0b0b"}, "view": {"stroke": "transparent"}};
+const darkConfig = {"background": "#1a1a19", "mark": {"color": "#3987e5"}, "range": {"category": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"]}, "axis": {"labelColor": "#c3c2b7", "titleColor": "#ffffff", "domainColor": "#383835", "tickColor": "#383835", "gridColor": "#2c2c2a", "labelLimit": 500}, "legend": {"labelColor": "#c3c2b7", "titleColor": "#ffffff", "labelLimit": 500}, "header": {"labelColor": "#ffffff", "titleColor": "#ffffff", "labelLimit": 500}, "title": {"color": "#ffffff"}, "view": {"stroke": "transparent"}};
+const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+const config = isDark ? darkConfig : lightConfig;
+specs.forEach(({ id, url }) => vegaEmbed('#' + id, url, { actions: false, config }));
+</script>
+</body>
+</html>
