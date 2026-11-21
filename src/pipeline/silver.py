@@ -7,7 +7,6 @@ a run that dies partway should be resumed one step at a time, not restarted.
 """
 import logging
 from pathlib import Path
-
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
@@ -41,10 +40,10 @@ def build_pageviews_fact(spark: SparkSession, config: Config) -> None:
         config.date_range.start,
         config.date_range.end,
     )
-    fact.write.mode("overwrite").partitionBy("date", "hour").parquet(str(path))
+    fact.repartition("date", "hour").write.mode("overwrite").partitionBy(
+        "date", "hour"
+    ).parquet(str(path))
 
-    # Counted windowed: dynamic overwrite leaves any previous date_range's
-    # partitions in place, which an unfiltered count would include.
     written = window_to_range(spark.read.parquet(str(path)), config)
     log.info("pageviews_fact: %s rows -> %s", f"{written.count():,}", path)
 
@@ -54,10 +53,7 @@ def build_page_dims(spark: SparkSession, config: Config) -> None:
     dims = page_dump.to_silver(
         spark, bronze_dir(config) / config.page_dump.wiki_db, config.wiki
     )
-    for name in PAGE_DIMS:
-        path = silver / name
-        dims[name].write.mode("overwrite").parquet(str(path))
-        log.info("%s: %s rows -> %s", name, f"{_row_count(spark, path):,}", path)
+    _write_tables(spark, silver, dims, PAGE_DIMS)
 
 
 def build_history_tables(spark: SparkSession, config: Config) -> None:
@@ -68,15 +64,24 @@ def build_history_tables(spark: SparkSession, config: Config) -> None:
         config.wiki,
         config.mediawiki_history.itn_page_title,
     )
-    counts = {}
-    for name in HISTORY_TABLES:
-        path = silver / name
-        history[name].write.mode("overwrite").parquet(str(path))
-        counts[name] = _row_count(spark, path)
-        log.info("%s: %s rows -> %s", name, f"{counts[name]:,}", path)
-
+    counts = _write_tables(spark, silver, history, HISTORY_TABLES)
     if counts["itn_edit_fact"] == 0 and config.mediawiki_history.itn_page_title:
         _warn_no_itn_edits(config)
+
+
+def _write_tables(
+    spark: SparkSession,
+    silver: Path,
+    tables: dict[str, DataFrame],
+    names: tuple[str, ...],
+) -> dict[str, int]:
+    counts = {}
+    for name in names:
+        path = silver / name
+        tables[name].write.mode("overwrite").parquet(str(path))
+        counts[name] = _row_count(spark, path)
+        log.info("%s: %s rows -> %s", name, f"{counts[name]:,}", path)
+    return counts
 
 
 def read_tables(
@@ -95,8 +100,6 @@ def read_tables(
 
 def window_to_range(pageviews_fact: DataFrame, config: Config) -> DataFrame:
     start_dt, end_dt = config.date_range.bounds()
-    # `date` is an int partition column, so this prunes whole directories
-    # before reading; the `ts` bound trims the part-hours at each end.
     return pageviews_fact.filter(
         F.col("date").between(
             int(start_dt.strftime("%Y%m%d")), int(end_dt.strftime("%Y%m%d"))
