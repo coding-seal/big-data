@@ -1,9 +1,6 @@
 # Pipeline config: which wiki(s), which date range, where storage lives.
-# Defaults to Simple English Wikipedia for fast local iteration -- same
-# schema as enwiki, ~100x smaller dumps. Switch `wiki`/`wiki_db` and the
-# pageviews domain codes to go to enwiki; nothing else should need to
-# change (see docs/arch/layered-design.md, "Config, not code, controls
-# scope").
+# Defaults to Simple English Wikipedia. Use config.enwiki.yaml to analyze
+# English Wikipedia over the same window.
 
 wiki: simple
 storage_root: data  # bronze/silver land under <repo_root>/<storage_root>/
@@ -24,15 +21,11 @@ mediawiki_history:
   # docs/sources/wikinews-itn.md.
   itn_page_title: null
 
-# A full week, so the questions that need time depth can actually answer.
-# Two hours was enough to exercise the pipeline but made Q2/Q3/Q5 degenerate:
-# with n hourly samples a page's views/avg ratio can't exceed n, so n=2 put
-# every spike below q2's SPIKE_RATIO=3 by arithmetic, and a single Sunday
-# gave q5 nothing to contrast. 2026-10-04 is a Sunday, so this covers one of
-# every weekday. 168 hourly files, ~54MB each (all projects) -- ~9GB.
+# Twelve complete calendar months (8,760 hourly files, shared with enwiki).
+# Both bounds are inclusive and use UTC.
 date_range:
-  start: "2026-10-04T00"
-  end: "2026-10-10T23"
+  start: "2025-11-01T00"
+  end: "2026-10-31T23"
 
 # Optional: override a question's default chart type (Vega-Lite `mark`)
 # without touching any code -- any mark name works: bar, line, point, area,

@@ -1,8 +1,7 @@
 # English Wikipedia profile. Same pipeline, same code -- only this file
-# differs from config.yaml (the Simple English default used for fast local
-# iteration). Run it with:
+# differs from config.yaml (the Simple English default). Run it with:
 #
-#     just config=config.enwiki.yaml all
+#     BIG_DATA_CONFIG=config.enwiki.yaml just pipeline::all
 #     uv run python3 src/run.py --config config.enwiki.yaml build-silver
 #
 # Why a second config exists at all: Q2 needs a wiki with a live "In the
@@ -10,12 +9,9 @@
 # pages are redirects, not an edited page (docs/sources/wikinews-itn.md).
 # No amount of simplewiki data fixes that; only switching wikis does.
 #
-# Cost, measured (docs/sources/page-dump.md, mediawiki-history.md):
-# page.sql.gz 2.39GB + categorylinks.sql.gz 2.54GB + linktarget + redirect,
-# plus ~900MB per month of revision history the date range touches. The
-# hourly pageviews files are all-projects, so they are *not* downloaded
-# again -- bronze/pageviews is shared with config.yaml (see run.py's
-# storage_paths).
+# This profile downloads the SQL snapshots (docs/sources/page-dump.md)
+# and the monthly revision-history archives for the configured window.
+# Hourly pageviews cover all projects and are shared via bronze/pageviews.
 
 wiki: en
 storage_root: data  # silver/gold are per-wiki under here, so this coexists
@@ -44,20 +40,12 @@ mediawiki_history:
   # (namespace id, title), which is how mediawiki_history stores pages.
   itn_page_title: Template:In_the_news
 
-# A September week, deliberately *not* the same week as config.yaml's.
-# Q2 is the reason: mediawiki_history lags, and its newest monthly file is
-# a stub -- the 2026-09 snapshot's `2026-10` file holds a single day
-# (2026-10-01, 16,262 revisions), so an October pageviews window has zero
-# ITN edits to match against. The `2026-09` file is 557MB against a
-# complete August's 570MB, i.e. a full month. Mon 2026-09-14 .. Sun
-# 2026-09-20 sits well inside it.
-#
-# The two profiles covering different weeks is fine: bronze/pageviews is
-# shared, and pageviews.to_silver reads only the hours its own date_range
-# names, so neither profile sees the other's data.
+# Twelve complete calendar months (inclusive UTC bounds). The 2026-10
+# mediawiki_history snapshot lists a monthly archive for each month in
+# this window. Both profiles reuse the same hourly downloads.
 date_range:
-  start: "2026-09-14T00"
-  end: "2026-09-20T23"
+  start: "2025-11-01T00"
+  end: "2026-10-31T23"
 
 gold:
   q4_length_revisions: line

@@ -14,7 +14,9 @@ Course project ("polytech big-data"): an extensible Spark pipeline that answers 
 
 All five questions and all three source modules (`pageviews`, `page_dump`, `mediawiki_history`) are implemented in `src/` per `docs/arch/layered-design.md`, and run end-to-end against real downloaded data: `just pipeline::all` produces `data/gold/<wiki>/*.json`, one Vega-Lite chart spec per question.
 
-Two profiles ship: `config.yaml` (Simple English, small and fast) and `config.enwiki.yaml` (English Wikipedia). Q2 only produces signal on the latter, because simplewiki has no maintained "In the news" page (`docs/sources/wikinews-itn.md`).
+Two profiles ship: `config.yaml` (Simple English) and `config.enwiki.yaml` (English Wikipedia). Both cover November 2025 through October 2026 and share the 8,760 hourly pageview archives. Q2 only produces signal on the latter, because simplewiki has no maintained "In the news" page (`docs/sources/wikinews-itn.md`).
+
+The shared [Wikimedia pageviews archives](https://dumps.wikimedia.org/other/pageviews/) total about 465 GB compressed for this window. The wiki-specific dumps, Parquet tables, and Spark shuffle spill require additional space.
 
 Known limits of the *results*, as opposed to the code: `category_dim` is raw MediaWiki categories, which are maintenance-tag dominated, so Q1's "topics" aren't really topics until a Wikidata-backed `topic_dim` lands. See `tasks.md` for what's next.
 
@@ -62,6 +64,18 @@ just docker::run
 # equivalent to: docker build -t big-data . && docker run --rm -v "$(pwd)/data:/app/data" big-data
 ```
 
+On Windows, run these commands in PowerShell from the repository directory
+to process the English Wikipedia profile in the background:
+
+```powershell
+docker build -t big-data .
+docker run -d --name big-data-year --volume "${PWD}\data:/app/data" --env BIG_DATA_CONFIG=config.enwiki.yaml --env SPARK_DRIVER_MEMORY=6g big-data
+docker logs -f big-data-year
+```
+
+The bind mount keeps the raw downloads, Parquet tables, chart specs, and
+Spark shuffle spill in `data/` on the same drive as the repository.
+
 Results land in `./data/gold/<wiki>/*.json` on the host. Override the profile the same way as a local run, e.g. `BIG_DATA_CONFIG=config.enwiki.yaml just docker::run` (set `SPARK_DRIVER_MEMORY=6g` in your shell first for the enwiki profile; both are passed through automatically). This has to be an env var, not a `just config=... ` override — `just` doesn't carry CLI variable overrides across a module boundary (`pipeline.just`'s `config` isn't visible to an override issued at the root), so `pipeline.just` reads `$BIG_DATA_CONFIG` instead.
 
 For active development, `just docker::dev` instead starts a long-lived container with the toolchain only (no code baked in) and the repo bind-mounted, so edits on the host take effect immediately, then attaches a shell:
@@ -88,6 +102,18 @@ To run the English Wikipedia profile instead, point every command at the other c
 ```sh
 uv run python3 src/run.py --config config.enwiki.yaml download
 ```
+
+Pass question names to `build-gold` to write only those chart specs. This
+command reruns Q2 and Q3 after an interrupted enwiki build.
+
+```sh
+uv run python3 src/run.py --config config.enwiki.yaml build-gold q2_spikes_news q3_decay
+```
+
+Inside the container, use `BIG_DATA_CONFIG=config.enwiki.yaml just pipeline::gold q2_spikes_news q3_decay`.
+Omit the names to build every chart.
+
+`download` fetches up to three files at a time, matching the [Wikimedia download service](https://dumps.wikimedia.org/) limit per IP. Run one download command at a time on the same connection. If interrupted, rerun it to fetch the remaining files.
 
 ## Site
 

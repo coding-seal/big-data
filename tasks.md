@@ -4,7 +4,7 @@ What's outstanding, carried between sessions. This file is the store of record �
 
 Finished work isn't logged here; the measurements and gotchas worth keeping go to `AGENTS.md` ("Known gotchas") or `docs/`, and the rest to git history.
 
-Last updated: 2026-11-12.
+Last updated: 2026-11-23.
 
 ## Next
 
@@ -14,18 +14,22 @@ Last updated: 2026-11-12.
 
 2. **Fix Q4's mixed denominators in code, not just caption.** `site.py`'s caption now *discloses* that `avg_views` is over all articles in the bucket while `avg_revisions` is only over the 3–43% `revision_dim` covers, and that the coverage gradient runs the same direction as the effect — but the tooltip itself still mixes them. Disclosure is a stopgap, not the fix.
 
-3. **Verify the remaining unverified change.** `pipeline/silver.py::_row_count` (counts written Parquet rather than recomputing) still hasn't been exercised by a real `build-silver`. The other two items here are now proven: the `src/pipeline/` restructure ran a full enwiki `build-gold` end to end, and `sources/page_dump.py`'s explicit schemas are confirmed by all four enwiki row-count gates matching exactly.
+3. **Verify the full-year enwiki gold results.** On 2026-11-19, `build-silver` completed in 17 h 33 min wall time. Spark reread and counted all seven tables. `pageviews_fact` holds 8,517,746,212 rows for 2025-11-01 through 2026-10-31 UTC, with one nonempty Parquet file in each of the 8,760 hourly partitions (105.33 GiB total on disk). The other six tables have `_SUCCESS` markers.
+
+   `build-gold` wrote Q1 and Q1b, then failed in Q2 after 40 h 15 min with an I/O error writing a local shuffle file. The stopped run left 872.4 GiB of shuffle files and 7.7 GiB free on `D:`. Removing that run's `blockmgr` directory restored 880.2 GiB free, and the two gold files kept the same SHA-256 hashes. Resume with Q2 and verify the remaining six outputs. Full-run peak disk use is still unmeasured.
+
+   `build-gold` now accepts question names, stops Spark between questions, and shares one temporary article-hour Parquet between Q2 and Q3. Q2 selects its top spikes before matching news. Synthetic Spark runs verified the selected and full builds, output equivalence against a reference calculation, and shuffle cleanup between questions. Runtime and peak disk use on the annual data still need a run.
 
    Run one Spark session at a time — the box is 15GB and an enwiki job holds ~6.8GB.
 
-4. **Push `site/` and flip the GitHub Pages toggle.** The site generator, workflow, and content are built (see "Resolved" below) but `site/` hasn't been pushed yet, and the one-time repo Settings → Pages → Source: "GitHub Actions" switch hasn't been flipped. Until both happen there's a workflow file and a local directory, not a published site.
+4. **Verify GitHub Pages deployment.** The site includes the annual enwiki Q1 and Q1b charts alongside the earlier weekly sections. Check the deployment workflow and the repository's Pages source setting ("GitHub Actions").
 
 ## Resolved (2026-11-12)
 
 - **Q2's news test can now say "no".** `NEWS_MATCHED` requires a nearby ITN edit whose comment `[[links]]` the spiking article by title, not just a timestamp within ±24h. Verified on the enwiki week: all 20 top spikes now read `NEWS_ABSENT`, and independently re-checking every linked title across the *entire* downloaded ITN history (not just the ±24h window) confirms this isn't a matching bug — only one of the 20 (`78th_Primetime_Emmy_Awards`) was ever linked at all, 5 days after its spike.
 - **Q3 now ranks by `peak / avg`, not absolute `peak_views`.** Verified on the enwiki week: `Main_Page` and the `2014_European_Parliament_election` scraper traffic are both gone from the top 10, replaced by `Indian_Institutes_of_Technology` and `Peccary` — exactly the pages the old ranking was excluding (see the now-removed item 2's measurement, still in git history).
 - **`Living_people` excluded from Q1b.** `questions/categories.py::ADMINISTRATIVE_CATEGORIES` is a one-entry explicit list, anti-joined alongside `hidden_category_dim`. It's metadata (every biography of a living person carries it) rather than a subject, same editorial judgement the old name-regex made, now scoped to one named entry instead of 43 patterns. Verified on both profiles.
-- **GitHub Pages site built.** `pipeline/site.py` (+ `build-site` subcommand, `just pipeline::site`) renders every `config*.yaml` profile's `data/gold/<wiki>/*.json` into a committed `site/` — one page, one section per wiki, vega-embed from CDN, each chart captioned with its window (read from the config, not hardcoded) and a denominator/caveat line. `.github/workflows/pages.yml` deploys `site/` on push to `master`. Not yet pushed — see item 4 above.
+- **GitHub Pages site built.** `pipeline/site.py` (+ `build-site` subcommand, `just pipeline::site`) renders every `config*.yaml` profile's `data/gold/<wiki>/*.json` into a committed `site/` — one page, one section per wiki, vega-embed from CDN, each chart captioned with its window (read from the config, not hardcoded) and a denominator/caveat line. `.github/workflows/pages.yml` deploys `site/` on push to `master`.
 
 ## Validated (enwiki, 2026-09-14..20, don't re-derive)
 
@@ -65,5 +69,5 @@ A full `build-gold` ran clean on 2026-10-28 in **47 min** (not the ~85 previousl
 - **Q1 is still the dominant cost** at ~25 min, even after the `(page_id, hour)` pre-aggregation landed (29m40s → 25m18s, ~15%; the 7x-fan-out arithmetic does not translate, see `questions/categories.py`). With `q1b` there are now two of them in a `build-gold`. Remaining levers, roughly by ratio:
   - `approx_count_distinct` for the `articles` column in q1/q1b/q5. It is the heaviest operator (~2M groups) and `articles` is a tooltip field, not a headline number — but it changes a reported figure by ~1–2%, so it needs a decision, not a drive-by.
   - `agg` in `views_by_category_hour` is consumed twice (top-N selection and the final join). Spark's `ReuseExchange` *may* collapse it since the subplans match, but nothing makes that explicit — check `explain()` before adding a `persist()`. `q3_decay` has the same shape with `ts`.
-  - Share the `with_page_id` fold across questions: it now runs 8x per `build-gold`, not 5x. See the "Decide" item above — the middle path is persisting it for one run rather than materializing a silver table.
+  - Extend reuse of the `with_page_id` fold to other questions. Q2 and Q3 now share their article-hour series within one `build-gold` invocation.
 - Optionally reclaim ~36GB by deleting `data/bronze/enwiki/*.sql`; the `.gz` originals stay and builds just get slower.

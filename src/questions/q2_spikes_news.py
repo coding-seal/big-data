@@ -37,10 +37,10 @@ So NEWS_MATCHED now requires a nearby edit whose comment links the spiking
 article by title -- a real, falsifiable test instead of a proximity count
 that can only ever say yes.
 """
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from questions.pages import with_page_id
+from questions.pages import ARTICLE_HOUR_INPUTS, article_hours
 
 # A hour counts as a "spike" for a page if its views are at least this many
 # times that page's own average views over the window.
@@ -50,6 +50,7 @@ SPIKE_RATIO = 3.0
 NEWS_WINDOW_HOURS = 24
 # Same reasoning as q1/q3's top-N caps.
 TOP_N_SPIKES = 20
+USES_ARTICLE_HOURS = True
 # Captures "Title" out of "[[Title]]" or "[[Title|display text]]".
 # shortcut: exact-case match only (no first-letter case-folding), so a link
 # typed with a different first-letter case than page_dim's title silently
@@ -63,7 +64,7 @@ NEWS_UNKNOWN = "no ITN data for this hour"
 
 
 def required_tables() -> list[str]:
-    return ["pageviews_fact", "itn_edit_fact", "page_dim", "redirect_dim"]
+    return [*ARTICLE_HOUR_INPUTS, "itn_edit_fact"]
 
 
 def chart_encoding() -> dict:
@@ -86,32 +87,20 @@ def default_mark() -> str:
 
 
 def run(tables: dict[str, DataFrame]) -> DataFrame:
-    pageviews = tables["pageviews_fact"]  # carries `ts`, see sources/pageviews.py
     itn = tables["itn_edit_fact"]
     page_dim = tables["page_dim"]
-    redirect_dim = tables["redirect_dim"]
 
-    # Spike detection has to run per *article*, not per URL title. Redirect
-    # traffic is 7.2% of all views and concentrated on exactly the
-    # news-driven pages this question is about (questions/pages.py), so keying
-    # on page_title both splits one news event across several rows and
-    # understates the article's real peak -- the two failure modes that
-    # would most distort an answer about news.
-    ts = (
-        with_page_id(pageviews, page_dim, redirect_dim)
-        .groupBy("page_id", "ts")
-        .agg(F.sum("views").alias("views"))
-    )
-
-    baseline = ts.groupBy("page_id").agg(F.avg("views").alias("avg_views"))
-    # page_title joins in here, not after limit() like q3: content matching
-    # below needs it to compare against the ITN comment's linked titles.
+    # A window computes the baseline over the observed article-hours
+    # without joining the full hourly series back to itself.
     spikes = (
-        ts.join(baseline, "page_id")
+        article_hours(tables)
+        .withColumn("avg_views", F.avg("views").over(Window.partitionBy("page_id")))
         .filter(F.col("avg_views") > 0)
         .filter(F.col("views") >= SPIKE_RATIO * F.col("avg_views"))
         .join(page_dim.select("page_id", "page_title"), "page_id")
         .select("page_title", "ts", "views", "avg_views")
+        .orderBy(F.desc("views"), "page_title", "ts")
+        .limit(TOP_N_SPIKES)
     )
 
     # mediawiki_history stores the raw event_timestamp string (e.g.
@@ -130,18 +119,23 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
         ).alias("linked_titles"),
     )
 
-    # itn_links is tiny (one page's edit history for the downloaded window)
-    # -- joining its exploded links is nowhere near pageviews_fact's scale.
+    # News status does not affect rank. Match only the selected spikes and
+    # retain unmatched rows in the same join.
+    linked_edits = itn_links.select(
+        "news_ts", F.explode("linked_titles").alias("page_title")
+    ).alias("edit")
+    hours_from_news = (
+        F.abs(F.col("spike.ts").cast("long") - F.col("edit.news_ts").cast("long"))
+        / 3600
+    )
     nearest_news = (
-        spikes.join(
-            itn_links.select("news_ts", F.explode("linked_titles").alias("page_title")),
-            "page_title",
+        spikes.alias("spike").join(
+            linked_edits,
+            (F.col("spike.page_title") == F.col("edit.page_title"))
+            & (hours_from_news <= NEWS_WINDOW_HOURS),
+            "left",
         )
-        .withColumn(
-            "hours_from_news",
-            F.abs(F.col("ts").cast("long") - F.col("news_ts").cast("long")) / 3600,
-        )
-        .filter(F.col("hours_from_news") <= NEWS_WINDOW_HOURS)
+        .select("spike.*", hours_from_news.alias("hours_from_news"))
         .groupBy("page_title", "ts", "views", "avg_views")
         .agg(F.min("hours_from_news").alias("hours_from_nearest_news"))
     )
@@ -157,8 +151,7 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
     window = F.expr(f"interval {NEWS_WINDOW_HOURS} hours")
 
     return (
-        spikes.join(nearest_news, ["page_title", "ts", "views", "avg_views"], "left")
-        .crossJoin(bounds)  # one row, so this is a broadcast, not a blowup
+        nearest_news.crossJoin(bounds)
         .withColumn(
             "news_match",
             F.when(F.col("hours_from_nearest_news").isNotNull(), F.lit(NEWS_MATCHED))
@@ -171,6 +164,5 @@ def run(tables: dict[str, DataFrame]) -> DataFrame:
             .otherwise(F.lit(NEWS_UNKNOWN)),
         )
         .drop("news_from", "news_to")
-        .orderBy(F.desc("views"))
-        .limit(TOP_N_SPIKES)
+        .orderBy(F.desc("views"), "page_title", "ts")
     )

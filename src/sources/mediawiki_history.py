@@ -18,7 +18,7 @@ from pathlib import Path
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-from sources.http import fetch_text, fetch_to
+from sources.http import fetch_files, fetch_text
 from sources.namespaces import split_prefixed_title
 
 INDEX_URL = "https://dumps.wikimedia.org/other/mediawiki_history/"
@@ -99,16 +99,7 @@ def download(
             )
 
     base_url = WIKI_DIR_URL_TMPL.format(snapshot=snapshot, wiki_db=wiki_db)
-    paths = []
-    for filename in filenames:
-        path = dest / filename
-        if path.exists():
-            log.info("skip (already have) %s", path.name)
-        else:
-            log.info("fetching %s", path.name)
-            fetch_to(base_url + filename, path)
-        paths.append(path)
-    return paths
+    return fetch_files((base_url + filename, dest / filename) for filename in filenames)
 
 
 def to_silver(
