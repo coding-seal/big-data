@@ -14,7 +14,7 @@ from pathlib import Path
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-from sources.http import fetch_to
+from sources.http import fetch_files
 from sources.namespaces import NON_ARTICLE_REGEX
 from config import DateRange
 
@@ -54,20 +54,16 @@ def download(start: str, end: str, dest: Path) -> list[Path]:
     """
     dest.mkdir(parents=True, exist_ok=True)
 
-    fetched = []
-    for hour in _hours(start, end):
-        path = dest / _filename(hour)
-        if path.exists():
-            log.info("skip (already have) %s", path.name)
-        else:
-            url = URL_TMPL.format(
+    return fetch_files(
+        (
+            URL_TMPL.format(
                 yyyy=f"{hour.year:04d}", mm=f"{hour.month:02d}",
                 yyyymmdd=hour.strftime("%Y%m%d"), hh=f"{hour.hour:02d}",
-            )
-            log.info("fetching %s", path.name)
-            fetch_to(url, path)
-        fetched.append(path)
-    return fetched
+            ),
+            dest / _filename(hour),
+        )
+        for hour in _hours(start, end)
+    )
 
 
 def to_silver(

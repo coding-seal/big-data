@@ -6,6 +6,7 @@ individually callable on purpose: each takes tens of minutes on enwiki, and
 a run that dies partway should be resumed one step at a time, not restarted.
 """
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -85,14 +86,14 @@ def _write_tables(
 
 
 def read_tables(
-    spark: SparkSession, module, config: Config
+    spark: SparkSession, names: Iterable[str], config: Config
 ) -> dict[str, DataFrame]:
-    """A question's `required_tables()`, with `pageviews_fact` windowed to
+    """Read the requested tables, with `pageviews_fact` windowed to
     `date_range` -- silver can hold more windows than the config asks for
     (AGENTS.md). Dimension tables are snapshots and read whole."""
     silver = silver_dir(config)
     tables = {}
-    for table in module.required_tables():
+    for table in names:
         df = spark.read.parquet(str(silver / table))
         tables[table] = window_to_range(df, config) if table == "pageviews_fact" else df
     return tables

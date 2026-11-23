@@ -22,6 +22,8 @@ _MAX_TITLE_LEN = 255
 # configured profiles spell it the same way; a wiki that doesn't would need
 # this in config.yaml alongside mediawiki_history.itn_page_title.
 MAIN_PAGE_TITLES = ["Main_Page"]
+ARTICLE_HOUR_INPUTS = ("pageviews_fact", "page_dim", "redirect_dim")
+ARTICLE_HOURS = "article_hours"
 
 
 def normalize_title(title: Column) -> Column:
@@ -91,4 +93,15 @@ def with_page_id(
         views.withColumn("_title", normalize_title(F.col("page_title")))
         .join(titles, "_title")
         .drop("_title")
+    )
+
+
+def article_hours(tables: dict[str, DataFrame]) -> DataFrame:
+    """One row per observed article-hour, with redirects already resolved."""
+    if ARTICLE_HOURS in tables:
+        return tables[ARTICLE_HOURS]
+    return (
+        with_page_id(tables["pageviews_fact"], tables["page_dim"], tables["redirect_dim"])
+        .groupBy("page_id", "ts")
+        .agg(F.sum("views").alias("views"))
     )

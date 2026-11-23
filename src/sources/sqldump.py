@@ -42,15 +42,14 @@ _WHITESPACE = " \t\r\n"
 def parse_insert_line(text: str):
     """Yield one list-of-raw-field-strings per value tuple found in `text`.
 
-    If `text` contains `VALUES`, scanning starts right after it (handles a
-    full classic single-line statement, or a lone header line with no data,
-    which correctly yields nothing). If `VALUES` is absent, scanning starts
-    from the beginning -- handles a bare data line like `(1,0,'Foo',...),`.
+    For an INSERT header, scanning starts after `VALUES`. For a bare data
+    line like `(1,0,'Foo',...),`, it starts at the beginning.
     Stops at the first non-tuple, non-whitespace character (typically a
     statement's terminating `;`), so trailing content doesn't matter.
     """
-    idx = text.find("VALUES")
-    i = idx + len("VALUES") if idx != -1 else 0
+    if text.startswith("INSERT INTO `"):
+        _, _, text = text.partition("` VALUES")
+    i = 0
     n = len(text)
 
     while i < n:

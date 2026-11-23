@@ -183,17 +183,12 @@ def _facet_if_crowded(spec: dict) -> dict:
 
 
 def build() -> None:
-    if SITE_DIR.exists():
-        shutil.rmtree(SITE_DIR)
-    (SITE_DIR / "data").mkdir(parents=True)
-
-    if not GOLD_DIR.exists():
+    gold_specs = sorted(GOLD_DIR.glob("*/*.json"))
+    if not gold_specs:
         raise FileNotFoundError(f"no gold output under {GOLD_DIR} -- run build-gold first")
-    wikis = sorted(p.name for p in GOLD_DIR.iterdir() if p.is_dir())
-    if not wikis:
-        raise FileNotFoundError(f"no gold output under {GOLD_DIR} -- run build-gold first")
+    wikis = sorted({path.parent.name for path in gold_specs})
 
-    content = yaml.safe_load(CONTENT_PATH.read_text())
+    content = yaml.safe_load(CONTENT_PATH.read_text(encoding="utf-8"))
     field_titles = content.get("field_titles", {})
     value_translations = content.get("value_translations", {})
     wiki_labels = content.get("wiki_labels", {})
@@ -202,9 +197,9 @@ def build() -> None:
     profiles = _profiles()
     sections = []
     specs: list[dict[str, str]] = []
+    chart_files: dict[Path, dict] = {}
     for wiki in wikis:
         wiki_dir = SITE_DIR / "data" / wiki
-        wiki_dir.mkdir(parents=True)
         config = profiles.get(wiki)
         window = f"{config.date_range.start} .. {config.date_range.end}" if config else "unknown"
 
@@ -212,7 +207,7 @@ def build() -> None:
         for src in sorted((GOLD_DIR / wiki).glob("*.json")):
             spec = json.loads(src.read_text())
             spec = _facet_if_crowded(_translate_spec(spec, field_titles, value_translations))
-            (wiki_dir / src.name).write_text(json.dumps(spec))
+            chart_files[wiki_dir / src.name] = spec
 
             name = src.stem
             text = questions.get(name, {})
@@ -229,7 +224,7 @@ def build() -> None:
             "id": wiki, "label": wiki_labels.get(wiki, wiki), "window": window, "charts": charts,
         })
 
-    html = Template(TEMPLATE_PATH.read_text()).render(
+    html = Template(TEMPLATE_PATH.read_text(encoding="utf-8")).render(
         page=content["page"],
         sections=sections,
         vega_cdn=VEGA_CDN,
@@ -237,4 +232,9 @@ def build() -> None:
         light_config_json=json.dumps(VEGA_CONFIG_LIGHT),
         dark_config_json=json.dumps(VEGA_CONFIG_DARK),
     )
-    (SITE_DIR / "index.html").write_text(html)
+    if SITE_DIR.exists():
+        shutil.rmtree(SITE_DIR)
+    for path, spec in chart_files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(spec), encoding="utf-8")
+    (SITE_DIR / "index.html").write_text(html, encoding="utf-8")

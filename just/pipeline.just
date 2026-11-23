@@ -5,6 +5,8 @@
 # at all means `uv` and a JDK aren't guaranteed to be on `PATH` either; use
 # `uv run python3 src/run.py <command>` directly in that case instead of
 # going through `just` (see README.md "Without containers").
+set working-directory := ".."
+
 uv := "uv"
 py := uv + " run python3"
 
@@ -45,11 +47,11 @@ build-silver: _require-container
 question name: _require-container
     {{run}} run-question {{name}}
 
-# Run every question, write each as a Vega-Lite chart spec
+# Run selected questions (all by default), writing Vega-Lite chart specs
 # (data/gold/<wiki>/*.json). Change a chart's type via the config file's
 # `gold:` section, not code.
-gold: _require-container
-    {{run}} build-gold
+gold *questions: _require-container
+    {{run}} build-gold {{questions}}
 
 # Render every profile's already-built gold/*.json as a static site/
 # (index.html + copied chart specs) for GitHub Pages. Spans every

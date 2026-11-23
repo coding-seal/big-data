@@ -29,7 +29,7 @@ def dump_path(bronze_dir: Path, table: str) -> Path:
 def assert_single_table(path: Path, table_name: str) -> None:
     """One table per file is what lets `parse_table` identify data lines by
     shape alone, so it is worth reading the DDL header to confirm."""
-    marker = f"INSERT INTO `{table_name}`"
+    marker = f"INSERT INTO `{table_name}` "
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rt", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -47,13 +47,13 @@ def parse_table(sc, path: Path, table_name: str, row_fn):
     import sqldump  # shipped via addPyFile by the caller
 
     assert_single_table(path, table_name)
+    insert_prefix = f"INSERT INTO `{table_name}` "
 
     def parse_partition(lines):
         for line in lines:
-            # Data lines are recognised by shape, not by position after an
-            # INSERT: a split dump starts mid-statement, and tracking
-            # "inside the block" instead silently dropped 109K pages.
-            if line.startswith("("):
+            # Recognize both inline INSERTs and standalone tuples. A Spark
+            # partition can start mid-statement, so there is no block state.
+            if line.startswith(("(", insert_prefix)):
                 yield from (row_fn(f) for f in sqldump.parse_insert_line(line))
 
     # Line-by-line: wholeTextFiles overflowed the driver heap on a 30MB dump.

@@ -22,7 +22,9 @@ RUN uv sync --frozen
 
 COPY . .
 
-ENV PYSPARK_PYTHON=python3 \
+# Keep Spark shuffle spill on the same mounted disk as the data.
+ENV SPARK_LOCAL_DIRS=/app/data/spark-local \
+    PYSPARK_PYTHON=python3 \
     PATH="/app/.venv/bin:${PATH}"
 
 # Mount a host directory here to get bronze/silver/gold out of the

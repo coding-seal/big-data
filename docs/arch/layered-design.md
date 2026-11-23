@@ -30,8 +30,8 @@ src/
     q4_length_revisions.py  (implemented, both halves)
     q5_weekday.py           (implemented)
     (q6...)         -- new questions land here only
-    -- shared by the questions above, no other layer imports these:
-    pages.py               (requested title -> canonical page_id, via redirect_dim)
+    -- shared page/category logic:
+    pages.py               (redirect resolution and article-hour aggregation)
     categories.py          (maintenance-category filtering, category-hour aggregation)
 
   run.py            -- thin CLI: build silver, run a question, or build gold
@@ -80,9 +80,22 @@ chart_encoding()                    -> Vega-Lite encoding: which fields map to w
 default_mark()                      -> Vega-Lite mark name (e.g. "bar") if config.yaml doesn't override it
 ```
 
-`run.py` discovers question modules (directory scan or a simple registry dict), loads only the silver tables each one declares needing, and executes it. This is the actual mechanism behind "add a question without touching the system": a new file in `questions/`, nothing else.
+`run.py` selects modules from the explicit registry. Each module declares the
+silver tables it needs. A module that reads pageviews exclusively through
+`questions.pages.article_hours()` can set `USES_ARTICLE_HOURS = True`. When
+the same gold run selects multiple consumers, it prepares the
+`(page_id, ts, views)` series once from the configured window and passes each
+consumer a DataFrame backed by that run's temporary Parquet. A single
+consumer, including `run-question`, builds the series from its silver inputs.
 
-Gold is a chart spec, not a table. `run.py build-gold` runs every question, turns its result into a Vega-Lite JSON spec (`pipeline/charts.py`), and writes `data/gold/<question>.json`. Encoding (which fields are x/y/color/tooltip) is the question's own concern, declared in code; *mark* (the chart type) is deliberately config, overridable per-question in `config.yaml`'s `gold:` section without touching any module, see `config.yaml`'s comments. Nothing here commits to a renderer: the same spec works as a static image or (via vega-embed) a fully interactive chart with zero backend, so how these actually get displayed can be decided later.
+`run.py build-gold [QUESTION ...]` runs the named questions, or all registered
+questions by default. Each question runs in its own Spark session so Spark
+can release local shuffle files before the next question. Completed charts
+are written as Vega-Lite JSON specs under `data/gold/<wiki>/`. The temporary
+Parquet is removed after its last consumer or when the invocation raises an
+exception.
+The question module owns its encoding, and `config.yaml`'s `gold:` section can
+override the mark for each question.
 
 A result must already be small or aggregated before it reaches `chart_encoding()`. `q1_topic_time` caps itself to its top 15 categories by views; the first version returned all ~22K categories in `category_dim` and produced an unrenderable 29K-row, 3.7MB spec. Capping is the question module's job, since it knows its own data's shape, not something the gold step or chart type can fix.
 

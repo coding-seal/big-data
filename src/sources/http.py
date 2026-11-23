@@ -11,6 +11,8 @@ import shutil
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 USER_AGENT = "big-data-coursework-pipeline/0.1 (polytech big-data course project)"
@@ -19,6 +21,8 @@ USER_AGENT = "big-data-coursework-pipeline/0.1 (polytech big-data course project
 
 RETRIES = 3
 RETRY_DELAY_S = 2
+# Wikimedia caps downloads at three connections per IP: https://dumps.wikimedia.org/
+DOWNLOAD_WORKERS = 3
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +50,11 @@ def fetch_to(url: str, dest: Path) -> None:
                 # and buffering one of the latter in the driver's heap
                 # while Spark is also running is how you OOM a laptop.
                 shutil.copyfileobj(resp, f, length=1024 * 1024)
-            tmp.rename(dest)  # atomic: a failed download never looks "already have"
+            try:
+                tmp.rename(dest)  # atomic: a failed download never looks "already have"
+            except FileExistsError:
+                # On Windows another profile may have published the same file first.
+                tmp.unlink(missing_ok=True)
             return
         except urllib.error.HTTPError:
             tmp.unlink(missing_ok=True)
@@ -61,6 +69,33 @@ def fetch_to(url: str, dest: Path) -> None:
                 )
                 time.sleep(RETRY_DELAY_S)
     raise RuntimeError(f"failed to fetch {url} after {RETRIES} attempts: {last_err}") from last_err
+
+
+def fetch_files(files: Iterable[tuple[str, Path]]) -> list[Path]:
+    """Fetch missing files concurrently and return all paths in input order."""
+    paths = []
+    with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as pool:
+        futures = []
+        try:
+            for url, path in files:
+                paths.append(path)
+                if path.exists():
+                    log.info("skip (already have) %s", path.name)
+                else:
+                    futures.append(pool.submit(_fetch_file, url, path))
+            for future in as_completed(futures):
+                future.result()
+        finally:
+            # Stop queued work on failure. Active downloads can finish and
+            # will be skipped when the command is run again.
+            for future in futures:
+                future.cancel()
+    return paths
+
+
+def _fetch_file(url: str, path: Path) -> None:
+    log.info("fetching %s", path.name)
+    fetch_to(url, path)
 
 
 def fetch_text(url: str) -> str:

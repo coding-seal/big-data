@@ -68,12 +68,36 @@ footer { margin: 3rem 0 1.5rem; color: var(--muted); font-size: 0.8rem; }
 <body>
 <h1>Трафик просмотров Википедии: находки</h1>
 <p class="subtitle">Spark-пайплайн по открытым дампам Wikimedia. Код: <a href="https://github.com/Coding-Seal/big-data">Coding-Seal/big-data</a>.</p>
-<p class="intro">Пять вопросов (Q1-Q5) про трафик просмотров, посчитанные на двух вики ниже; у каждого графика — своя оговорка о том, что число покрывает и чего нет.</p>
+<p class="intro">Результаты исследования трафика просмотров Википедии. У каждого графика указаны период расчёта и особенности подсчёта.</p>
 
 <ul class="toc">
+  <li><a href="#wiki-en-annual">Английская Википедия, годовой расчёт Q1 и Q1b</a></li>
   <li><a href="#wiki-en">Английская Википедия (enwiki)</a></li><li><a href="#wiki-simple">Simple English Wikipedia (simplewiki)</a></li>
 </ul>
 
+
+<section class="wiki-section" id="wiki-en-annual">
+  <h2>Английская Википедия (enwiki), годовой расчёт</h2>
+  <p class="window">Период: 2025-11-01T00 .. 2026-10-31T23 UTC</p>
+  <ul class="quicknav">
+    <li><a href="#chart-en-annual-q1_topic_time">Q1: трафик по категориям без фильтра</a></li><li><a href="#chart-en-annual-q1b_topic_time_filtered">Q1b: трафик по категориям с фильтром</a></li>
+  </ul>
+
+  <article class="chart-card">
+    <h3>Q1: трафик по категориям без фильтра</h3>
+    <p class="summary">Просмотры и число статей по категориям и часам дня, без исключений.</p>
+    <div class="chart" id="chart-en-annual-q1_topic_time"></div>
+    <p class="caveat">Это не классификация по темам: в таком масштабе верхние категории оказываются служебными метками, а не предметом статьи. Просмотр считается один раз на каждую категорию статьи, суммы не складываются, так что столбики нельзя читать как общий итог.</p>
+  </article>
+
+  <article class="chart-card">
+    <h3>Q1b: трафик по категориям с фильтром</h3>
+    <p class="summary">То же самое, но без скрытых категорий MediaWiki (флаг __HIDDENCAT__) и без одной явно убранной учётной категории, Living_people.</p>
+    <div class="chart" id="chart-en-annual-q1b_topic_time_filtered"></div>
+    <p class="caveat">То, что осталось, всё ещё сырые категории MediaWiki, а не темы: они обычно уже предмета статьи и пересекаются между собой (несколько категорий про американских актёров описывают одних и тех же людей). Просмотры всё ещё не складываются между категориями.</p>
+  </article>
+
+</section>
 
 <section class="wiki-section" id="wiki-en">
   <h2>Английская Википедия (enwiki)</h2>
@@ -208,7 +232,7 @@ footer { margin: 3rem 0 1.5rem; color: var(--muted); font-size: 0.8rem; }
 
 <footer>Под каждым графиком есть строка с оговоркой: что именно считают его числа и чего они не покрывают. Прочитайте её, прежде чем цитировать число.</footer>
 <script>
-const specs = [{"id": "chart-en-q1_topic_time", "url": "data/en/q1_topic_time.json"}, {"id": "chart-en-q1b_topic_time_filtered", "url": "data/en/q1b_topic_time_filtered.json"}, {"id": "chart-en-q2_spikes_news", "url": "data/en/q2_spikes_news.json"}, {"id": "chart-en-q3_decay", "url": "data/en/q3_decay.json"}, {"id": "chart-en-q4_length_revisions", "url": "data/en/q4_length_revisions.json"}, {"id": "chart-en-q4b_length_no_mainpage", "url": "data/en/q4b_length_no_mainpage.json"}, {"id": "chart-en-q5_weekday", "url": "data/en/q5_weekday.json"}, {"id": "chart-en-q5b_weekday_no_mainpage", "url": "data/en/q5b_weekday_no_mainpage.json"}, {"id": "chart-simple-q1_topic_time", "url": "data/simple/q1_topic_time.json"}, {"id": "chart-simple-q1b_topic_time_filtered", "url": "data/simple/q1b_topic_time_filtered.json"}, {"id": "chart-simple-q2_spikes_news", "url": "data/simple/q2_spikes_news.json"}, {"id": "chart-simple-q3_decay", "url": "data/simple/q3_decay.json"}, {"id": "chart-simple-q4_length_revisions", "url": "data/simple/q4_length_revisions.json"}, {"id": "chart-simple-q4b_length_no_mainpage", "url": "data/simple/q4b_length_no_mainpage.json"}, {"id": "chart-simple-q5_weekday", "url": "data/simple/q5_weekday.json"}, {"id": "chart-simple-q5b_weekday_no_mainpage", "url": "data/simple/q5b_weekday_no_mainpage.json"}];
+const specs = [{"id": "chart-en-annual-q1_topic_time", "url": "data/en/2025-11-01_2026-10-31/q1_topic_time.json"}, {"id": "chart-en-annual-q1b_topic_time_filtered", "url": "data/en/2025-11-01_2026-10-31/q1b_topic_time_filtered.json"}, {"id": "chart-en-q1_topic_time", "url": "data/en/q1_topic_time.json"}, {"id": "chart-en-q1b_topic_time_filtered", "url": "data/en/q1b_topic_time_filtered.json"}, {"id": "chart-en-q2_spikes_news", "url": "data/en/q2_spikes_news.json"}, {"id": "chart-en-q3_decay", "url": "data/en/q3_decay.json"}, {"id": "chart-en-q4_length_revisions", "url": "data/en/q4_length_revisions.json"}, {"id": "chart-en-q4b_length_no_mainpage", "url": "data/en/q4b_length_no_mainpage.json"}, {"id": "chart-en-q5_weekday", "url": "data/en/q5_weekday.json"}, {"id": "chart-en-q5b_weekday_no_mainpage", "url": "data/en/q5b_weekday_no_mainpage.json"}, {"id": "chart-simple-q1_topic_time", "url": "data/simple/q1_topic_time.json"}, {"id": "chart-simple-q1b_topic_time_filtered", "url": "data/simple/q1b_topic_time_filtered.json"}, {"id": "chart-simple-q2_spikes_news", "url": "data/simple/q2_spikes_news.json"}, {"id": "chart-simple-q3_decay", "url": "data/simple/q3_decay.json"}, {"id": "chart-simple-q4_length_revisions", "url": "data/simple/q4_length_revisions.json"}, {"id": "chart-simple-q4b_length_no_mainpage", "url": "data/simple/q4b_length_no_mainpage.json"}, {"id": "chart-simple-q5_weekday", "url": "data/simple/q5_weekday.json"}, {"id": "chart-simple-q5b_weekday_no_mainpage", "url": "data/simple/q5b_weekday_no_mainpage.json"}];
 const lightConfig = {"background": "#fcfcfb", "mark": {"color": "#2a78d6"}, "range": {"category": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]}, "axis": {"labelColor": "#52514e", "titleColor": "#0b0b0b", "domainColor": "#c3c2b7", "tickColor": "#c3c2b7", "gridColor": "#e1e0d9", "labelLimit": 500}, "legend": {"labelColor": "#52514e", "titleColor": "#0b0b0b", "labelLimit": 500}, "header": {"labelColor": "#0b0b0b", "titleColor": "#0b0b0b", "labelLimit": 500}, "title": {"color": "#0b0b0b"}, "view": {"stroke": "transparent"}};
 const darkConfig = {"background": "#1a1a19", "mark": {"color": "#3987e5"}, "range": {"category": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"]}, "axis": {"labelColor": "#c3c2b7", "titleColor": "#ffffff", "domainColor": "#383835", "tickColor": "#383835", "gridColor": "#2c2c2a", "labelLimit": 500}, "legend": {"labelColor": "#c3c2b7", "titleColor": "#ffffff", "labelLimit": 500}, "header": {"labelColor": "#ffffff", "titleColor": "#ffffff", "labelLimit": 500}, "title": {"color": "#ffffff"}, "view": {"stroke": "transparent"}};
 const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;

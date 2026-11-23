@@ -12,12 +12,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
       | bash -s -- --to /usr/local/bin
 
-ENV PYSPARK_PYTHON=python3 \
+# Keep Spark shuffle spill on the same mounted disk as the data.
+ENV SPARK_LOCAL_DIRS=/app/data/spark-local \
+    PYSPARK_PYTHON=python3 \
     PATH="/app/.venv/bin:${PATH}"
 WORKDIR /app
 
 COPY docker/entrypoint-dev.sh /entrypoint-dev.sh
-RUN chmod +x /entrypoint-dev.sh
+# Windows checkouts can use CRLF, which breaks the Linux shebang.
+RUN sed -i 's/\r$//' /entrypoint-dev.sh && chmod +x /entrypoint-dev.sh
 
 ENTRYPOINT ["/entrypoint-dev.sh"]
 # Idle forever; `just docker-dev` attaches with a separate `exec -it bash`

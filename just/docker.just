@@ -1,4 +1,6 @@
 # Container recipes: `just docker::build`, `just docker::run`, `just docker::dev`.
+set working-directory := ".."
+
 # docker if it's on PATH, otherwise podman -- same interface for both.
 container_engine := `command -v docker >/dev/null 2>&1 && echo docker || echo podman`
 

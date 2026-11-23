@@ -18,7 +18,7 @@ from pyspark.sql.types import (
 )
 
 from sources.dumpreader import SQLDUMP_PATH, dump_path, parse_table
-from sources.http import fetch_to
+from sources.http import fetch_files
 
 TABLES = ["page", "categorylinks", "linktarget", "redirect", "page_props"]
 URL_TMPL = "https://dumps.wikimedia.org/{wiki_db}/latest/{wiki_db}-latest-{table}.sql.gz"
@@ -85,16 +85,10 @@ def download(wiki_db: str, dest: Path) -> list[Path]:
     Resumable: a file already present in `dest` is skipped.
     """
     dest.mkdir(parents=True, exist_ok=True)
-    paths = []
-    for table in TABLES:
-        path = dest / f"{table}.sql.gz"
-        if path.exists():
-            log.info("skip (already have) %s", path.name)
-        else:
-            log.info("fetching %s", path.name)
-            fetch_to(URL_TMPL.format(wiki_db=wiki_db, table=table), path)
-        paths.append(path)
-    return paths
+    return fetch_files(
+        (URL_TMPL.format(wiki_db=wiki_db, table=table), dest / f"{table}.sql.gz")
+        for table in TABLES
+    )
 
 
 def to_silver(spark: SparkSession, bronze_dir: Path, wiki: str) -> dict[str, DataFrame]:
